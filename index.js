@@ -78,37 +78,35 @@ function setupGit() {
   
   const repoUrl = `https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git`;
   
-  try {
-    // Always start fresh - clone into current directory
-    if (!fs.existsSync('.git')) {
-      console.log('Cloning repository...');
-      // Clone directly into current dir
-      run(`git clone ${repoUrl} .`);
-    } else {
-      console.log('Pulling latest...');
-      run('git fetch origin', true);
-      run('git reset --hard origin/main', true);
-    }
-    
-    run('git config user.email "bot@alliancedao.com"');
-    run('git config user.name "Alliance DAO Bot"');
-    console.log('Git setup complete');
-    return true;
-  } catch (e) {
-    console.log('Git setup error:', e.message);
-    // Try to init fresh if clone failed
-    try {
-      console.log('Trying fresh init...');
-      run('git init');
-      run(`git remote add origin https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git`, true);
-      run('git config user.email "bot@alliancedao.com"');
-      run('git config user.name "Alliance DAO Bot"');
-      return true;
-    } catch (e2) {
-      console.log('Git init also failed:', e2.message);
-      return false;
-    }
+  console.log('Setting up git...');
+  
+  // Always init git if not present
+  if (!fs.existsSync('.git')) {
+    run('git init', true);
+    run('git checkout -b main', true);
   }
+  
+  // Configure user
+  run('git config user.email "bot@alliancedao.com"');
+  run('git config user.name "Alliance DAO Bot"');
+  
+  // Remove existing origin and add fresh one
+  run('git remote remove origin', true);
+  run(`git remote add origin ${repoUrl}`);
+  console.log('Remote origin set to: ' + GITHUB_REPO);
+  
+  // Try to pull existing data
+  try {
+    console.log('Fetching from remote...');
+    run('git fetch origin main', true);
+    run('git reset --hard origin/main', true);
+    console.log('Synced with remote');
+  } catch (e) {
+    console.log('No existing remote data (this is OK for first run)');
+  }
+  
+  console.log('Git setup complete');
+  return true;
 }
 
 function gitCommitAndPush(message) {
@@ -117,31 +115,39 @@ function gitCommitAndPush(message) {
     return;
   }
   
+  const repoUrl = `https://${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git`;
+  
   try {
+    // Make sure we're on main branch
+    run('git checkout -b main', true);
+    
+    // Ensure remote is set
+    run('git remote remove origin', true);
+    run(`git remote add origin ${repoUrl}`);
+    
+    // Stage all changes
     run('git add -A');
     
     // Check if there's anything to commit
     try {
       run(`git commit -m "${message}"`);
     } catch (e) {
-      console.log('Nothing to commit or commit failed');
+      console.log('Nothing new to commit');
       return;
     }
     
-    // Push with error handling
+    // Push 
     console.log('Pushing to GitHub...');
-    run('git push origin main');
-    console.log('✓ Successfully pushed to GitHub!');
-  } catch (e) {
-    console.log('Git push failed:', e.message);
-    // Try force push if normal push fails
     try {
-      console.log('Trying force push...');
-      run('git push -f origin main');
+      run('git push -u origin main');
+      console.log('✓ Successfully pushed to GitHub!');
+    } catch (e) {
+      console.log('Normal push failed, trying force push...');
+      run('git push -u origin main --force');
       console.log('✓ Force pushed to GitHub!');
-    } catch (e2) {
-      console.log('Force push also failed:', e2.message);
     }
+  } catch (e) {
+    console.log('Git error:', e.message);
   }
 }
 
